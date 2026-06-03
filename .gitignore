@@ -1,0 +1,16 @@
+# dependencies
+node_modules/
+
+# n8n local data / secrets
+.n8n/
+*.local
+*.env
+.env
+
+# n8n live exports (may contain credential references)
+*.live.json
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini

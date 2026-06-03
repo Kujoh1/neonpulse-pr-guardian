@@ -1,0 +1,334 @@
+{
+  "name": "Neon Pulse · PR Guardian",
+  "nodes": [
+    {
+      "id": "node-manual-trigger",
+      "name": "▶ Run review",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -220,
+        300
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "node-github-trigger",
+      "name": "PR opened / updated (production)",
+      "type": "n8n-nodes-base.githubTrigger",
+      "typeVersion": 1,
+      "position": [
+        -220,
+        80
+      ],
+      "disabled": true,
+      "parameters": {
+        "authentication": "accessToken",
+        "owner": "Kujoh1",
+        "repository": "Designsystem-Neonpulse",
+        "events": [
+          "pull_request"
+        ]
+      },
+      "notesInFlow": true,
+      "notes": "PRODUCTION: fires on every PR. Needs the workflow active + a public webhook URL (n8n tunnel / reverse proxy). For local testing we use the manual trigger instead."
+    },
+    {
+      "id": "node-list-prs",
+      "name": "Get newest open PR",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        0,
+        300
+      ],
+      "parameters": {
+        "url": "https://api.github.com/repos/Kujoh1/Designsystem-Neonpulse/pulls",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "state",
+              "value": "open"
+            },
+            {
+              "name": "sort",
+              "value": "created"
+            },
+            {
+              "name": "direction",
+              "value": "desc"
+            },
+            {
+              "name": "per_page",
+              "value": "1"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "node-parse-pr",
+      "name": "Parse PR",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ],
+      "parameters": {
+        "jsCode": "// Take the newest open PR and normalise the fields we need downstream.\nconst items = $input.all();\nif (items.length === 0) {\n  throw new Error('No open pull request found. Run the \"Seed demo PR\" workflow first, or open a PR on the repo.');\n}\nconst pr = items[0].json;\nreturn [{ json: {\n  owner: pr.base?.repo?.owner?.login || 'Kujoh1',\n  repo: pr.base?.repo?.name || 'Designsystem-Neonpulse',\n  number: pr.number,\n  title: pr.title,\n  body: pr.body || '(no description)',\n  author: pr.user?.login,\n  htmlUrl: pr.html_url,\n} }];"
+      }
+    },
+    {
+      "id": "node-get-files",
+      "name": "Get changed files",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        440,
+        300
+      ],
+      "parameters": {
+        "url": "=https://api.github.com/repos/Kujoh1/Designsystem-Neonpulse/pulls/{{ $json.number }}/files",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "per_page",
+              "value": "100"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "node-build-payload",
+      "name": "Build review payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        300
+      ],
+      "parameters": {
+        "jsCode": "// Keep only design-relevant files and assemble one diff blob for the agent.\nconst files = $input.all().map(i => i.json);\nconst exts = ['.css', '.html', '.htm', '.scss'];\nconst relevant = files.filter(f => f.filename && exts.some(e => f.filename.toLowerCase().endsWith(e)));\nlet diffText = '';\nfor (const f of relevant) {\n  diffText += `\\n### FILE: ${f.filename}  (${f.status}, +${f.additions}/-${f.deletions})\\n`;\n  diffText += (f.patch || '(no textual diff available — binary, renamed, or too large)') + '\\n';\n}\nconst pr = $('Parse PR').first().json;\nreturn [{ json: {\n  ...pr,\n  changedFiles: relevant.map(f => f.filename),\n  reviewedCount: relevant.length,\n  totalFiles: files.length,\n  diffText: diffText.trim() || 'No CSS/HTML/SCSS files were changed in this PR.',\n} }];"
+      }
+    },
+    {
+      "id": "node-claude",
+      "name": "Claude (Anthropic)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.3,
+      "position": [
+        720,
+        540
+      ],
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "claude-sonnet-4-6",
+          "cachedResultName": "Claude Sonnet 4.6"
+        },
+        "options": {
+          "temperature": 0.2,
+          "maxTokensToSample": 3500
+        }
+      }
+    },
+    {
+      "id": "node-fetch-tool",
+      "name": "fetch_repo_file",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [
+        900,
+        540
+      ],
+      "parameters": {
+        "toolDescription": "Fetch the full CURRENT content of a file in the Neon Pulse repo by its repo-relative path (e.g. 'colors_and_type.css' or 'ui_kits/dashboard/index.html'). Use this when a diff lacks surrounding context or to confirm an exact token value before flagging it.",
+        "method": "GET",
+        "url": "https://raw.githubusercontent.com/Kujoh1/Designsystem-Neonpulse/main/{path}",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "path",
+              "description": "Repo-relative file path, e.g. colors_and_type.css",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "node-guardian",
+      "name": "Design System Guardian",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        900,
+        300
+      ],
+      "parameters": {
+        "promptType": "define",
+        "text": "=A pull request was opened/updated on the Neon Pulse design system repository.\n\nPR #{{ $json.number }} — {{ $json.title }}\nAuthor: {{ $json.author }}\nDescription: {{ $json.body }}\nDesign files changed ({{ $json.reviewedCount }} of {{ $json.totalFiles }} total): {{ $json.changedFiles.join(\", \") }}\n\nReview the following diffs against the Neon Pulse rulebook and produce the PR review comment exactly in the required output format:\n\n{{ $json.diffText }}",
+        "options": {
+          "systemMessage": "You are the **Neon Pulse Design System Guardian** — an automated design reviewer that protects the consistency and quality of the Neon Pulse design system on every pull request. You are precise, constructive, and terse. You write like the system itself: a calm control panel, never marketing fluff.\n\nNeon Pulse is a **dark-first, cyberpunk flat-design system**. Philosophy: *\"Flat but alive\"* — matte near-black surfaces with electric neon as a functional signal, never decoration.\n\nYour job: review the changed CSS / HTML in this pull request against the rulebook below, then write ONE markdown review comment. You may call `fetch_repo_file` to pull the full current content of any file (e.g. `colors_and_type.css`) when a diff lacks surrounding context or you need to confirm a token value.\n\n==================================================\nTHE RULEBOOK\n==================================================\n\n## Design tokens (the only allowed raw values)\n\nSurfaces (near-black ramp): --bg-0 #07070d · --bg-1 #0c0c16 · --bg-2 #12121f · --bg-3 #1a1a2b · --bg-4 #24243a\nText (cool-white ramp): --fg-1 #eef1fb · --fg-2 #aab0c8 · --fg-3 #6c7290 · --fg-4 #454b66 · --fg-on-neon #07070d\nNeon accents: --neon-blue #2d7bff · --neon-cyan #00e5ff · --neon-violet #7c4dff · --neon-magenta #ff2d9b\nSemantic: --success #18f0a0 · --warning #ffcf3a · --danger #ff3b6b · --info #00e5ff (each has a 14%-opacity tinted fill)\nBorders/glow: --line-1/2/3 (1px hairlines) · --line-glow rgba(0,229,255,.40) · --glow-cyan/blue/magenta/soft (~30%)\nSpacing (4px base): 4 8 12 16 20 24 32 40 48 64 80\nRadii: --r-sm 8 · --r-md 12 · --r-lg 16 · 20 · 28 · --r-full 999\nType: Display=Space Grotesk · Body=Sora · Mono=JetBrains Mono (0.14em tracking, UPPERCASE)\nType scale: display-xl 64 · display-l 48 · h1 36 · h2 28 · h3 22 · h4 18 · body-lg 18 · body 16 · body-sm 14 · caption 13 · mono-label 12\nMotion: 120ms fast · 200ms default · 360ms slow; ease-out / ease-in-out; never bouncy.\n\n## Principles (review intent, not just values)\n\n1. **Dark is canvas, neon is signal** — ~90% of any screen is neutral surface + grey text; neon marks ONLY interactive or live elements (~10%).\n2. **Flat with intentional depth** — depth via surface steps (bg-1→bg-2→bg-3) + 1px hairlines. No bevels, no ambient glow, no stacked drop-shadows. Only --shadow-1 / --shadow-2.\n3. **Glow as state, not decoration** — halos appear ONLY on hover / focus / active / live-data. Never static/ambient on cards.\n4. **Monospace as HUD language** — labels, metrics, statuses, timestamps use JetBrains Mono, UPPERCASE, 1–3 words.\n5. **Soft corners** — 12–20px radii (cards --r-lg 16, buttons --r-md 12 or --r-full).\n6. **Primary = blue→cyan gradient; secondary/\"energy\" = violet→magenta.**\n7. **Icons** — Lucide outline only, 1.75–2px stroke, currentColor. Never mix filled+outline. **No emoji, ever.**\n\n## Brand voice (for any user-facing copy in the diff)\n\nConfident, terse, system-readout tone. Sentence case for headings/body; UPPERCASE reserved for mono labels. Headlines ≤6 words, button labels 1–2 words. Lead with numbers, format figures in mono. No emoji. Errors are factual, never apologetic (\"Connection dropped. Retrying in 3s…\"). Avoid casual exclamation marks. `→` and `·` separators are on-brand.\n\n## Accessibility\n\nText must stay on the cool-white ramp against near-black for contrast. Neon must be a *functional* marker, never the sole carrier of meaning (pair with label/icon/shape). Semantic colors use their 14% tinted fills for badges/alerts.\n\n==================================================\nHOW TO REVIEW\n==================================================\n\nFor each changed file, check in this order:\n1. **Token compliance** — flag any hardcoded hex/px/font that has a matching token; name the exact token they should use instead.\n2. **Principle adherence** — 90/10 neon balance, glow-only-on-state, flat depth (no bevels/heavy shadows), mono labels uppercase & short, soft radii, primary/secondary gradient direction, Lucide-outline icons, no emoji.\n3. **Brand voice** — only for visible copy (headings, labels, button text, messages).\n4. **Accessibility** — contrast risks, color-as-sole-meaning.\n\nSeverity levels:\n- 🔴 **Block** — breaks the system (hardcoded color where a token exists, emoji, ambient glow on static card, filled icons, wrong gradient direction).\n- 🟡 **Warn** — likely drift / against principle but context-dependent (off-scale spacing, headline too long, exclamation mark).\n- 🔵 **Note** — minor polish or a question.\n\n==================================================\nOUTPUT FORMAT (return ONLY this markdown, nothing else)\n==================================================\n\n`## 🛡 Neon Pulse Guardian — Review`\n\nA one-line verdict using a neon-dot status:\n`**`STATUS`** · <n> blocking · <n> warnings · <n> notes` where STATUS is `PASS`, `CHANGES REQUESTED`, or `LGTM`.\n\nThen, grouped by file, a markdown table or bullet list of findings. Each finding:\n- severity badge → `path:line` (or the snippet) → what's wrong → the exact fix (name the token / principle).\n\nIf a diff is clean, say so plainly per file. End with one short, on-brand closing line (no emoji in the closing line; use `→` / `·`). Keep the whole comment scannable — terse, like a system readout, not an essay.\n\n==================================================\nCRITICAL OUTPUT RULE\n==================================================\nOutput ONLY the review markdown. Your ENTIRE response MUST begin with the exact characters: ## 🛡 Neon Pulse Guardian — Review\nDo NOT write any preamble, reasoning, tool narration, acknowledgement or closing meta-text (no \"Token file confirmed\", no \"I have everything I need\", no \"Here is the review\"). Nothing before the heading, nothing after the final closing line.\n"
+        }
+      }
+    },
+    {
+      "id": "node-post-comment",
+      "name": "Post review comment",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1140,
+        300
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.github.com/repos/Kujoh1/Designsystem-Neonpulse/issues/{{ $('Build review payload').first().json.number }}/comments",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ body: $json.output }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "note-architecture",
+      "name": "Sticky · Architecture",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -260,
+        -120
+      ],
+      "parameters": {
+        "width": 460,
+        "height": 170,
+        "content": "## 🛡 Neon Pulse · PR Guardian\nDesign-system governance as an always-on service. **Production** fires on every PR via the GitHub webhook (top, disabled here). **Locally** we pull the newest open PR with the manual trigger — same pipeline, no public exposure."
+      }
+    },
+    {
+      "id": "note-brain",
+      "name": "Sticky · The brain",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        700,
+        720
+      ],
+      "parameters": {
+        "width": 460,
+        "height": 150,
+        "content": "### The reviewer\nClaude reviews the diff against the embedded Neon Pulse rulebook (tokens + principles + brand voice). The `fetch_repo_file` tool lets it pull live file content for context — so the review never drifts from the source of truth."
+      }
+    }
+  ],
+  "connections": {
+    "▶ Run review": {
+      "main": [
+        [
+          {
+            "node": "Get newest open PR",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get newest open PR": {
+      "main": [
+        [
+          {
+            "node": "Parse PR",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse PR": {
+      "main": [
+        [
+          {
+            "node": "Get changed files",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get changed files": {
+      "main": [
+        [
+          {
+            "node": "Build review payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build review payload": {
+      "main": [
+        [
+          {
+            "node": "Design System Guardian",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Design System Guardian": {
+      "main": [
+        [
+          {
+            "node": "Post review comment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude (Anthropic)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Design System Guardian",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "fetch_repo_file": {
+      "ai_tool": [
+        [
+          {
+            "node": "Design System Guardian",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": []
+}
