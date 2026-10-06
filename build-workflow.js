@@ -117,7 +117,7 @@ const buildPayload = {
     jsCode: [
       "// Keep only design-relevant files and assemble one diff blob for the agent.",
       "const files = $input.all().map(i => i.json);",
-      "const exts = ['.css', '.html', '.htm', '.scss'];",
+      "const exts = ['.css', '.html', '.htm', '.scss', '.jsx'];",
       "const relevant = files.filter(f => f.filename && exts.some(e => f.filename.toLowerCase().endsWith(e)));",
       "let diffText = '';",
       "for (const f of relevant) {",
