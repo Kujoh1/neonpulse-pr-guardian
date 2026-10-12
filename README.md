@@ -72,7 +72,7 @@ Die eigentliche Design-Kompetenz steckt in [`guardian-system-prompt.md`](guardia
 
 Der Agent darf via `fetch_repo_file` jederzeit die **aktuelle** Datei aus dem Repo nachladen — so driftet das Review nie von der Source of Truth weg.
 
-**Regelwerk v1.1** (Stand Neon Pulse 1.1.0): zwei Token-Ebenen (Komponenten nutzen nur semantische Aliase), Light Theme, die kanonischen `.np-*`-Klassen (Nachbauten werden markiert), Kontrast- und Fokus-Regeln, gepinnte CDN-Skripte mit SRI und selbst gehostete Fonts. Geprüft werden `.css`, `.html`, `.scss` und `.jsx`.
+**Regelwerk v1.2** (Stand Neon Pulse 1.4.0): fünf Breakpoints und Responsive-Regeln (mobile-first, Touch-Ziele, Hover nur mit Maus), zwei Token-Ebenen (Komponenten nutzen nur semantische Aliase), Light Theme, die kanonischen `.np-*`-Klassen (Nachbauten werden markiert), Kontrast- und Fokus-Regeln, gepinnte CDN-Skripte mit SRI und selbst gehostete Fonts. Geprüft werden `.css`, `.html`, `.scss` und `.jsx`.
 
 ## Setup (lokal, ohne n8n-Account)
 
