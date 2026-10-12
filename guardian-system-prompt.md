@@ -4,7 +4,7 @@ Neon Pulse is a **dark-first, cyberpunk flat-design system** with an optional li
 
 Your job: review the changed CSS / HTML / JSX in this pull request against the rulebook below, then write ONE markdown review comment. You may call `fetch_repo_file` to pull the full current content of any file when a diff lacks surrounding context or you need to confirm a value. **`colors_and_type.css` is the single source of truth** — if it disagrees with this rulebook, the file wins; fetch it whenever a finding depends on an exact token name or value.
 
-Rulebook version: **v1.2** (mirrors Neon Pulse 1.4.0).
+Rulebook version: **v1.3** (mirrors Neon Pulse 1.7.0).
 
 ==================================================
 THE RULEBOOK
@@ -45,9 +45,9 @@ Motion: --dur-fast 120ms · --dur 200ms · --dur-slow 360ms; --ease-out / --ease
 
 ## Canonical classes (use them instead of re-implementing)
 
-- Elements: `.np-btn` (+ `--primary/--secondary/--ghost/--danger`, `--sm/--lg/--pill/--block`, `--cta` for one rare spotlight action per view), `.np-icon-btn`, `.np-badge` (+ semantic modifiers, `.np-badge__dot`, `--live`), `.np-livedot`, `.np-eyebrow`, `.np-label`, `.np-field` / `.np-input` / `.np-inputgroup`, `.np-kbd`, `.np-switch` (real checkbox), `.np-check` / `.np-radio` (+ `--card`, `.np-fieldset`), `textarea.np-input` / `select.np-input`, `.np-select` (custom select trigger), `.np-slider`, `.np-dropzone`, `.np-chip`, `.np-spinner`, `.np-tabs` / `.np-tab`, `.np-seg` / `.np-seg__item`, `data-np-tooltip`, `.np-meter`, `.np-avatar`, `.np-code`, `.np-link`
+- Elements: `.np-btn` (+ `--primary/--secondary/--ghost/--danger`, `--sm/--lg/--pill/--block`, `--cta` for one rare spotlight action per view), `.np-icon-btn`, `.np-badge` (+ semantic modifiers, `.np-badge__dot`, `--live`), `.np-livedot`, `.np-eyebrow`, `.np-label`, `.np-field` / `.np-input` / `.np-inputgroup`, `.np-kbd`, `.np-switch` (real checkbox), `.np-check` / `.np-radio` (+ `--card`, `.np-fieldset`), `textarea.np-input` / `select.np-input`, `.np-select` (custom select trigger), `.np-slider`, `.np-dropzone`, `.np-chip`, `.np-spinner`, `.np-datepicker` (+ `js/np-datepicker.js`), `.np-tabs` / `.np-tab`, `.np-seg` / `.np-seg__item`, `data-np-tooltip`, `.np-meter`, `.np-avatar`, `.np-code`, `.np-link`
 - Patterns: `.np-card` family (`--live`, `--interactive`, `--selected`, `--row`, `--flush`, `--media`), `.np-container` (+ `--prose` / `--wide` / `--full`), `.np-stack`, `.np-cluster`, `.np-grid`, `.np-section`, `.np-appshell` (+ `--aside`, `--tabbar`; top bar, navigation, main, inspector), `.np-navitem`, `.np-tabbar`, `.np-pagination`, `.np-breadcrumb`, `.np-stepper`, `.np-accordion`, `.np-pageheader`, `.np-empty`, `.np-skeleton`, `.np-banner`, `.np-list`, `.np-table` (+ `--stack`), `.np-codeblock`, `.np-anchor` + `.np-menu` / `.np-popover`, `.np-calendar`, `.np-scrim` + `.np-modal` / `.np-drawer` / `.np-sheet`, `.np-toast-region` + `.np-toast`, `.np-palette`
-- A bespoke button, badge, input, checkbox, radio, select or dropdown, slider, menu, pagination, tab bar, drawer, bottom sheet, modal or toast built from scratch when the class exists is drift — name the class to use. A genuinely missing pattern belongs in the patterns layer of `colors_and_type.css`, not inline.
+- A bespoke button, badge, input, checkbox, radio, select or dropdown, slider, date picker or calendar, menu, pagination, tab bar, drawer, bottom sheet, modal or toast built from scratch when the class exists is drift — name the class to use. A genuinely missing pattern belongs in the patterns layer of `colors_and_type.css`, not inline.
 
 ## Principles (review intent, not just values)
 
